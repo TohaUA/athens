@@ -31,15 +31,18 @@ type Storage struct {
 // See https://cloud.google.com/docs/authentication/getting-started.
 func New(ctx context.Context, gcpConf *config.GCPConfig, timeout time.Duration) (*Storage, error) {
 	const op errors.Op = "gcp.New"
+
 	s, err := newClient(ctx, gcpConf, timeout)
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
 
-	if _, err = s.bucket.Attrs(ctx); err != nil {
+	_, err = s.bucket.Attrs(ctx)
+	if err != nil {
 		if errors.IsErr(err, storage.ErrBucketNotExist) {
 			return nil, errors.E(op, "You must manually create a storage bucket for Athens, see https://cloud.google.com/storage/docs/creating-buckets#storage-create-bucket-console")
 		}
+
 		return nil, errors.E(op, err)
 	}
 
@@ -50,18 +53,23 @@ func New(ctx context.Context, gcpConf *config.GCPConfig, timeout time.Duration) 
 // this is so that the unit tests can use this to create their own short-lived buckets.
 func newClient(ctx context.Context, gcpConf *config.GCPConfig, timeout time.Duration) (*Storage, error) {
 	const op errors.Op = "gcp.newClient"
+
 	var opts []option.ClientOption
+
 	if gcpConf.JSONKey != "" {
 		key, err := base64.StdEncoding.DecodeString(gcpConf.JSONKey)
 		if err != nil {
 			return nil, errors.E(op, fmt.Errorf("could not decode base64 json key: %w", err))
 		}
-		creds, err := google.CredentialsFromJSON(ctx, key, storage.ScopeReadWrite)
+
+		creds, err := google.CredentialsFromJSONWithType(ctx, key, google.ServiceAccount, storage.ScopeReadWrite)
 		if err != nil {
 			return nil, errors.E(op, fmt.Errorf("could not get GCS credentials: %w", err))
 		}
+
 		opts = append(opts, option.WithCredentials(creds))
 	}
+
 	s, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, errors.E(op, fmt.Errorf("could not create new storage client: %w", err))

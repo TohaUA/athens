@@ -22,12 +22,14 @@ func NewServer(strg storage.Backend) http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc(download.PathList, func(w http.ResponseWriter, r *http.Request) {
 		mod := mux.Vars(r)["module"]
+
 		list, err := strg.List(r.Context(), mod)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
 			return
 		}
-		_, _ = fmt.Fprintf(w, "%s", strings.Join(list, "\n"))
+
+		_, _ = fmt.Fprintf(w, "%s", strings.Join(list, "\n")) //nolint:gosec // G705: response is text/plain, not HTML
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionInfo, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -35,12 +37,14 @@ func NewServer(strg storage.Backend) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		info, err := strg.Info(r.Context(), params.Module, params.Version)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
 			return
 		}
-		_, _ = w.Write(info)
+
+		_, _ = w.Write(info) //nolint:gosec // G705: response is application/json, not HTML
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionModule, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -48,12 +52,14 @@ func NewServer(strg storage.Backend) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		mod, err := strg.GoMod(r.Context(), params.Module, params.Version)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
 			return
 		}
-		_, _ = w.Write(mod)
+
+		_, _ = w.Write(mod) //nolint:gosec // G705: response is text/plain, not HTML
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionZip, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -61,12 +67,15 @@ func NewServer(strg storage.Backend) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		zip, err := strg.Zip(r.Context(), params.Module, params.Version)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
 			return
 		}
+
 		defer func() { _ = zip.Close() }()
+
 		w.Header().Set("Content-Length", strconv.FormatInt(zip.Size(), 10))
 		_, _ = io.Copy(w, zip)
 	}).Methods(http.MethodGet)
@@ -76,39 +85,49 @@ func NewServer(strg storage.Backend) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = r.ParseMultipartForm(zip.MaxZipFile + zip.MaxGoMod)
+
+		err = r.ParseMultipartForm(zip.MaxZipFile + zip.MaxGoMod) //nolint:gosec // G120: body size is limited by the maxMemory parameter
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		infoFile, _, err := r.FormFile("mod.info")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		defer func() { _ = infoFile.Close() }()
+
 		info, err := io.ReadAll(infoFile)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		modReader, _, err := r.FormFile("mod.mod")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		defer func() { _ = modReader.Close() }()
+
 		modFile, err := io.ReadAll(modReader)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		modZ, _, err := r.FormFile("mod.zip")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		defer func() { _ = modZ.Close() }()
+
 		err = strg.Save(r.Context(), params.Module, params.Version, modFile, modZ, nil, info)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -122,11 +141,13 @@ func NewServer(strg storage.Backend) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		err = strg.Delete(r.Context(), params.Module, params.Version)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
 			return
 		}
 	}).Methods(http.MethodDelete)
+
 	return r
 }
