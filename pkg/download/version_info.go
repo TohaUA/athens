@@ -48,7 +48,7 @@ func InfoHandler(dp Protocol, lggr log.Entry, df *mode.DownloadFile) http.Handle
 			w.WriteHeader(errors.Kind(err))
 		}
 
-		_, _ = w.Write(info) //nolint:gosec // G705: response is application/json, not HTML
+		_, _ = w.Write(info)
 	}
 
 	return http.HandlerFunc(f)

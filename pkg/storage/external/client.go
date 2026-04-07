@@ -115,14 +115,14 @@ func (s *service) Save(ctx context.Context, mod, ver string, modFile []byte, zip
 		_ = pw.CloseWithError(err)
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr) //nolint:gosec // G704: URL is from configured external storage endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
 	if err != nil {
 		return errors.E(op, err)
 	}
 
 	req.Header.Add("Content-Type", mw.FormDataContentType())
 
-	resp, err := s.c.Do(req) //nolint:gosec // G704: URL is from configured external storage endpoint
+	resp, err := s.c.Do(req)
 	if err != nil {
 		return errors.E(op, err)
 	}
@@ -205,12 +205,12 @@ func (s *service) doRequest(ctx context.Context, method, mod, ver, ext string) (
 		url += "." + ext
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, nil) //nolint:gosec // G704: URL is from configured external storage endpoint
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, 0, errors.E(op, err)
 	}
 
-	resp, err := s.c.Do(req) //nolint:gosec // G704: URL is from configured external storage endpoint
+	resp, err := s.c.Do(req)
 	if err != nil {
 		return nil, 0, errors.E(op, err)
 	}

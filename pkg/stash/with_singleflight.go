@@ -37,6 +37,7 @@ type withsf struct {
 func (s *withsf) process(ctx context.Context, mod, ver string) {
 	mv := config.FmtModVer(mod, ver)
 	newVer, err := s.stasher.Stash(ctx, mod, ver)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -56,6 +57,7 @@ func (s *withsf) Stash(ctx context.Context, mod, ver string) (string, error) {
 	mv := config.FmtModVer(mod, ver)
 
 	s.mu.Lock()
+
 	subCh := make(chan *sfResp, 1)
 
 	_, inFlight := s.subs[mv]
@@ -65,6 +67,7 @@ func (s *withsf) Stash(ctx context.Context, mod, ver string) (string, error) {
 	} else {
 		s.subs[mv] = append(s.subs[mv], subCh)
 	}
+
 	s.mu.Unlock()
 
 	resp := <-subCh

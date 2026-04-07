@@ -22,7 +22,7 @@ func DecodePath(encoding string) (path string, err error) {
 
 // Ripped from cmd/go.
 func decodeString(encoding string) (string, bool) {
-	var buf []byte
+	buf := make([]byte, 0, len(encoding))
 
 	bang := false
 
@@ -52,7 +52,7 @@ func decodeString(encoding string) (string, bool) {
 			return "", false
 		}
 
-		buf = append(buf, byte(r)) //nolint:gosec // G115: r is guaranteed < utf8.RuneSelf (128) by check above
+		buf = append(buf, byte(r))
 	}
 
 	if bang {

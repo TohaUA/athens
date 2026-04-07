@@ -32,7 +32,7 @@ func initializeAuthFile(path string) error {
 
 	rcp := filepath.Join(hdir, fileName)
 
-	err = os.WriteFile(filepath.Clean(rcp), fileBts, 0o600) //nolint:gosec // G703: rcp is built from homedir + filepath.Base, no traversal risk
+	err = os.WriteFile(filepath.Clean(rcp), fileBts, 0o600)
 	if err != nil {
 		return fmt.Errorf("writing to auth file: %w", err)
 	}

@@ -29,7 +29,7 @@ func NewServer(strg storage.Backend) http.Handler {
 			return
 		}
 
-		_, _ = fmt.Fprintf(w, "%s", strings.Join(list, "\n")) //nolint:gosec // G705: response is text/plain, not HTML
+		_, _ = fmt.Fprintf(w, "%s", strings.Join(list, "\n"))
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionInfo, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -44,7 +44,7 @@ func NewServer(strg storage.Backend) http.Handler {
 			return
 		}
 
-		_, _ = w.Write(info) //nolint:gosec // G705: response is application/json, not HTML
+		_, _ = w.Write(info)
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionModule, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -59,7 +59,7 @@ func NewServer(strg storage.Backend) http.Handler {
 			return
 		}
 
-		_, _ = w.Write(mod) //nolint:gosec // G705: response is text/plain, not HTML
+		_, _ = w.Write(mod)
 	}).Methods(http.MethodGet)
 	r.HandleFunc(download.PathVersionZip, func(w http.ResponseWriter, r *http.Request) {
 		params, err := paths.GetAllParams(r)
@@ -86,7 +86,7 @@ func NewServer(strg storage.Backend) http.Handler {
 			return
 		}
 
-		err = r.ParseMultipartForm(zip.MaxZipFile + zip.MaxGoMod) //nolint:gosec // G120: body size is limited by the maxMemory parameter
+		err = r.ParseMultipartForm(zip.MaxZipFile + zip.MaxGoMod)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

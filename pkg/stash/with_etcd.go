@@ -48,6 +48,7 @@ func (s *etcd) Stash(ctx context.Context, mod, ver string) (newVer string, err e
 	defer sess.Close()
 
 	m := concurrency.NewMutex(sess, config.FmtModVer(mod, ver))
+
 	err = m.Lock(ctx)
 	if err != nil {
 		return "", errors.E(op, err)

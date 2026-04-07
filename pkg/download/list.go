@@ -35,12 +35,12 @@ func ListHandler(dp Protocol, lggr log.Entry, df *mode.DownloadFile) http.Handle
 			err = errors.E(op, err, severityLevel)
 			lggr.SystemErr(err)
 			w.WriteHeader(errors.Kind(err))
-			_, _ = fmt.Fprintf(w, "not found: %s", strings.Replace(err.Error(), "exit status 1: go: ", "", 1)) //nolint:gosec // G705: response is text/plain, not HTML
+			_, _ = fmt.Fprintf(w, "not found: %s", strings.Replace(err.Error(), "exit status 1: go: ", "", 1))
 
 			return
 		}
 
-		fmt.Fprint(w, strings.Join(versions, "\n")) //nolint:gosec // G705: response is text/plain, not HTML
+		fmt.Fprint(w, strings.Join(versions, "\n"))
 	}
 
 	return http.HandlerFunc(f)

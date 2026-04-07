@@ -53,7 +53,7 @@ func ModuleHandler(dp Protocol, lggr log.Entry, df *mode.DownloadFile) http.Hand
 			return
 		}
 
-		_, _ = w.Write(modBts) //nolint:gosec // G705: response is text/plain, not HTML
+		_, _ = w.Write(modBts)
 	}
 
 	return http.HandlerFunc(f)
