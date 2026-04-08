@@ -56,13 +56,8 @@ linters:
       max-complexity: 12
     gosec:
       excludes:
-        - G115
-        - G120
         - G204
         - G402
-        - G703
-        - G704
-        - G705
   exclusions:
     generated: lax
     rules:
@@ -88,3 +83,6 @@ linters:
         text: 'package-comments: should have a package comment'
       - path: (.+)\.go$
         text: 'ST1000: at least one file in a package should have a package comment'
+      - linters:
+          - gosec
+        text: 'G115:|G120:|G703:|G704:|G705:'
