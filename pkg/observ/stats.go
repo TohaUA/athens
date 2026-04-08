@@ -3,6 +3,7 @@ package observ
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -113,6 +114,9 @@ func registerStatsStackDriverExporter(projectID string) (func(), error) {
 
 func shutdownMeterProvider(mp *sdkmetric.MeterProvider) func() {
 	return func() {
-		_ = mp.Shutdown(context.Background())
+		err := mp.Shutdown(context.Background())
+		if err != nil {
+			log.Printf("failed to shutdown meter provider: %v", err)
+		}
 	}
 }

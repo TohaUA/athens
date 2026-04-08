@@ -2,6 +2,7 @@ package observ
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -27,14 +28,14 @@ func initMetrics() {
 			metric.WithDescription("Count of cache lookup results"),
 		)
 		if err != nil {
-			panic(err)
+			log.Fatalf("failed to create metric: %v", err)
 		}
 
 		upstreamFetchCounter, err = meter.Int64Counter("upstream_fetch_total",
 			metric.WithDescription("Count of upstream fetch attempts"),
 		)
 		if err != nil {
-			panic(err)
+			log.Fatalf("failed to create metric: %v", err)
 		}
 
 		upstreamFetchDuration, err = meter.Float64Histogram("upstream_fetch_duration_seconds",
@@ -42,7 +43,7 @@ func initMetrics() {
 			metric.WithExplicitBucketBoundaries(0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30),
 		)
 		if err != nil {
-			panic(err)
+			log.Fatalf("failed to create metric: %v", err)
 		}
 	})
 }

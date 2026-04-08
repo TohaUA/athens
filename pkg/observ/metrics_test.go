@@ -18,7 +18,8 @@ func resetMetrics(t *testing.T) *sdkmetric.ManualReader {
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	otel.SetMeterProvider(mp)
 
-	// Reset the sync.Once so metrics are re-initialized with the test provider.
+	// Reset sync.Once so metrics re-initialize with test provider.
+	// Safe: tests run sequentially, each gets its own provider.
 	metricsOnce = sync.Once{}
 
 	return reader

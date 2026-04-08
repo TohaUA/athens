@@ -3,6 +3,7 @@ package observ
 import (
 	"context"
 	"fmt"
+	"log"
 
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"github.com/gomods/athens/pkg/errors"
@@ -118,7 +119,10 @@ func newTracerProvider(exporter sdktrace.SpanExporter, service, env string) *sdk
 
 func shutdownFunc(tp *sdktrace.TracerProvider) func() {
 	return func() {
-		_ = tp.Shutdown(context.Background())
+		err := tp.Shutdown(context.Background())
+		if err != nil {
+			log.Printf("failed to shutdown tracer provider: %v", err)
+		}
 	}
 }
 

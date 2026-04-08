@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -62,7 +63,16 @@ func newClient(ctx context.Context, gcpConf *config.GCPConfig, timeout time.Dura
 			return nil, errors.E(op, fmt.Errorf("could not decode base64 json key: %w", err))
 		}
 
-		creds, err := google.CredentialsFromJSONWithType(ctx, key, google.ServiceAccount, storage.ScopeReadWrite)
+		var keyFile struct {
+			Type google.CredentialsType `json:"type"`
+		}
+
+		err = json.Unmarshal(key, &keyFile)
+		if err != nil {
+			return nil, errors.E(op, fmt.Errorf("could not parse credential type: %w", err))
+		}
+
+		creds, err := google.CredentialsFromJSONWithType(ctx, key, keyFile.Type, storage.ScopeReadWrite)
 		if err != nil {
 			return nil, errors.E(op, fmt.Errorf("could not get GCS credentials: %w", err))
 		}

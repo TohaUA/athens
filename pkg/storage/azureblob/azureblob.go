@@ -120,7 +120,10 @@ func (c *azureBlobStoreClient) ReadBlob(ctx context.Context, path string) (stora
 		return nil, errors.E(op, err)
 	}
 
-	size := *resp.ContentLength
+	var size int64
+	if resp.ContentLength != nil {
+		size = *resp.ContentLength
+	}
 
 	return storage.NewSizer(resp.Body, size), nil
 }
