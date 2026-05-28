@@ -40,7 +40,7 @@ func InfoHandler(dp Protocol, lggr log.Entry, df *mode.DownloadFile) http.Handle
 					return
 				}
 
-				http.Redirect(w, r, url, errors.KindRedirect) //nolint:gosec // URL is built from server config, not user input
+				http.Redirect(w, r, url, errors.KindRedirect)
 
 				return
 			}

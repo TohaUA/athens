@@ -40,7 +40,7 @@ func NewFilterMiddleware(mf *module.Filter, upstreamEndpoint string) mux.Middlew
 			case module.Direct:
 				// Direct: do not store modules locally, use upstream proxy
 				newURL := redirectToUpstreamURL(upstreamEndpoint, r.URL)
-				http.Redirect(w, r, newURL, http.StatusSeeOther) //nolint:gosec // URL is built from server config, not user input
+				http.Redirect(w, r, newURL, http.StatusSeeOther)
 
 				return
 			}
