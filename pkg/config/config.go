@@ -208,7 +208,7 @@ func defaultConfig() *Config {
 				Database: "athens",
 				Params: map[string]string{
 					"connect_timeout": "30",
-					"sslmode":         "disable",
+					"sslmode":         "prefer",
 				},
 			},
 		},
