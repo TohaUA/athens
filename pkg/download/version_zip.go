@@ -41,7 +41,7 @@ func ZipHandler(dp Protocol, lggr log.Entry, df *mode.DownloadFile) http.Handler
 					return
 				}
 
-				http.Redirect(w, r, url, errors.KindRedirect)
+				http.Redirect(w, r, url, errors.KindRedirect) //nolint:gosec // URL is built from server config, not user input
 
 				return
 			}
