@@ -63,6 +63,7 @@ linters:
         - G703
         - G704
         - G705
+        - G710
   exclusions:
     generated: lax
     rules:
