@@ -13,7 +13,7 @@ func TestMySQL(t *testing.T) {
 		t.SkipNow()
 	}
 	cfg := getTestConfig(t)
-	i, err := New(cfg)
+	i, err := New(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
