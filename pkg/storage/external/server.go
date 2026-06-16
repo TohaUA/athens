@@ -21,7 +21,11 @@ import (
 func NewServer(strg storage.Backend) http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc(download.PathList, func(w http.ResponseWriter, r *http.Request) {
-		mod := mux.Vars(r)["module"]
+		mod, err := paths.GetModule(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		list, err := strg.List(r.Context(), mod)
 		if err != nil {
 			http.Error(w, err.Error(), errors.Kind(err))
