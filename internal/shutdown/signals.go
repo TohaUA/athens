@@ -26,10 +26,24 @@ func GetSignals() []os.Signal {
 // This only applies to Unix platforms, and returns an already canceled context
 // on Windows.
 func ChildProcReaper(ctx context.Context, logger logrus.FieldLogger) context.Context {
+	done, cancel := context.WithCancel(context.WithoutCancel(ctx))
+
+	// Reaping reparented orphans is only meaningful when this process is the
+	// one orphans reparent to — i.e. PID 1. We do not call
+	// PR_SET_CHILD_SUBREAPER, so when Athens is not PID 1 (running under tini,
+	// dumb-init, a shared-process-namespace pod, systemd, or in tests) a real
+	// init reaps orphans for us. A greedy Wait4(-1) reaper here would then only
+	// race os/exec for our own `go` subprocesses: the reaper waits the process
+	// first, os/exec's wait returns "waitid: no child processes" (ECHILD), and
+	// the go command's exit status is lost — the source of flaky 500s on module
+	// path-walk probes. So only install the reaper when we are PID 1.
+	if os.Getpid() != 1 {
+		cancel()
+		return done
+	}
+
 	sigChld := make(chan os.Signal, 1)
 	signal.Notify(sigChld, syscall.SIGCHLD)
-
-	done, cancel := context.WithCancel(context.WithoutCancel(ctx))
 
 	go func() {
 		defer cancel()

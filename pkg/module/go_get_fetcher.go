@@ -170,40 +170,68 @@ func downloadModule(
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	err := cmd.Run()
-	if err != nil && !errors.IsNoChildProcessesErr(err) {
-		err = fmt.Errorf("%w: %s", err, stderr)
+	runErr := cmd.Run()
 
-		var m goModule
-
-		jsonErr := json.NewDecoder(stdout).Decode(&m)
-		if jsonErr != nil {
-			return goModule{}, errors.E(op, err)
-		}
-		// github quota exceeded
-		if isLimitHit(m.Error) {
-			return goModule{}, errors.E(op, m.Error, errors.KindRateLimit)
-		}
-
-		return goModule{}, errors.E(op, m.Error, errors.KindNotFound)
-	}
-
+	// `go mod download -json` reports the outcome of the module as a JSON object
+	// on stdout whose Error field is set iff the download failed; the process
+	// exit code merely mirrors that field. We therefore classify from the JSON
+	// output, treating the exit code as advisory only.
+	//
+	// The exit code cannot be trusted on its own: when Athens runs as PID 1 its
+	// SIGCHLD reaper (internal/shutdown) may Wait4() the go process before
+	// os/exec does, so cmd.Run returns a spurious "waitid: no child processes"
+	// (ECHILD) and the real status is lost. Branching on the exit code there
+	// made an identical failure classify as 404 or 500 depending on who won that
+	// reap — the flaky 500s seen on `go install pkg@version` path-walk probes.
+	// Driving the decision from the output removes that race by construction.
 	var m goModule
 
-	err = json.NewDecoder(stdout).Decode(&m)
-	if err != nil {
-		return goModule{}, errors.E(op, err)
-	}
+	jsonErr := json.NewDecoder(stdout).Decode(&m)
 
-	if m.Error != "" {
-		return goModule{}, errors.E(op, m.Error)
+	switch {
+	case jsonErr == nil && m.Error == "":
+		// go reported a successful download.
+		return m, nil
+	case jsonErr == nil:
+		// go reported a per-module failure (unknown revision, no go-import meta
+		// tags, invalid version, ...). Never a 5xx — see goGetErrKind.
+		return goModule{}, errors.E(op, m.Error, goGetErrKind(m.Error))
+	case runErr != nil && !errors.IsNoChildProcessesErr(runErr):
+		// The process genuinely failed and left no parseable JSON on stdout
+		// (the diagnostic went only to stderr). Classify from stderr.
+		err := fmt.Errorf("%w: %s", runErr, stderr)
+		return goModule{}, errors.E(op, err, goGetErrKind(stderr.String()))
+	default:
+		// No parseable JSON and no trustworthy failure signal — typically an
+		// empty stdout (decodes as io.EOF) left behind when the exit status was
+		// lost to the reaper race. Surface as not-found so the go client falls
+		// back to ,direct instead of aborting on a fatal 500.
+		err := fmt.Errorf("go mod download produced no module metadata: %w: %s", jsonErr, stderr)
+		return goModule{}, errors.E(op, err, errors.KindNotFound)
 	}
-
-	return m, nil
 }
 
 func isLimitHit(o string) bool {
 	return strings.Contains(o, "403 response from api.github.com")
+}
+
+// goGetErrKind classifies a `go mod download` / `go list` failure message into
+// an errors.Kind. Any failure to fetch a specific module@version is reported as
+// KindNotFound (404), never KindUnexpected (500): when resolving `pkg@version`
+// the go command probes candidate module paths longest-to-shortest and treats
+// *any* non-404/410 status (including 500) as fatal, while the GOPROXY
+// `,direct` fallback only triggers on 404/410. Rate-limit responses keep their
+// dedicated kind so callers can back off. Classification is intentionally NOT
+// based on which stream (stdout JSON vs. stderr) produced output, because that
+// is non-deterministic — a swallowed "waitid: no child processes" wait race can
+// route an identical failure through either path.
+// See https://github.com/golang/go/issues/30134.
+func goGetErrKind(msg string) int {
+	if isLimitHit(msg) {
+		return errors.KindRateLimit
+	}
+
+	return errors.KindNotFound
 }
 
 // getRepoDirName takes a raw repository URI and a version and creates a directory name that the
