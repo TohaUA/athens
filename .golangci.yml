@@ -64,7 +64,6 @@ linters:
         - G703
         - G704
         - G705
-        - G710
   exclusions:
     generated: lax
     rules:
@@ -92,3 +91,5 @@ linters:
         text: 'ST1000: at least one file in a package should have a package comment'
       - path: (.+)\.go$
         text: 'G115: integer overflow conversion int -> int32'
+      - path: (.+)\.go$
+        text: 'G710: Open redirect'
