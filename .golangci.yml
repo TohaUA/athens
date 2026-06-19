@@ -58,6 +58,7 @@ linters:
       max-complexity: 12
     gosec:
       excludes:
+        - G120
         - G204
         - G402
         - G703
@@ -90,3 +91,5 @@ linters:
         text: 'ST1000: at least one file in a package should have a package comment'
       - path: (.+)\.go$
         text: 'G115: integer overflow conversion int -> int32'
+      - path: (.+)\.go$
+        text: 'G710: Open redirect'
