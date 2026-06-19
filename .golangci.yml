@@ -58,11 +58,13 @@ linters:
       max-complexity: 12
     gosec:
       excludes:
+        - G120
         - G204
         - G402
         - G703
         - G704
         - G705
+        - G710
   exclusions:
     generated: lax
     rules:
