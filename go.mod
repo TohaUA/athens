@@ -42,7 +42,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.6.12
 	go.etcd.io/etcd/client/v3 v3.6.12
 	go.etcd.io/etcd/server/v3 v3.6.12
-	go.mongodb.org/mongo-driver/v2 v2.7.0
+	go.mongodb.org/mongo-driver/v2 v2.5.0
 	go.opencensus.io v0.24.0
 	golang.org/x/mod v0.37.0
 	golang.org/x/oauth2 v0.36.0
