@@ -48,6 +48,7 @@ jobs:
           branch: main
           minorList: feat
           patchList: fix, perf
+          maxTagsToFetch: 50
           noNewCommitBehavior: silent
           noVersionBumpBehavior: silent
 
