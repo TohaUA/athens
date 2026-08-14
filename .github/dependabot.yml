@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: update-go-pkg
+      prefix: fix
       include: scope
     open-pull-requests-limit: 2
     target-branch: main
@@ -15,7 +15,7 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: update-github-action
+      prefix: fix
       include: scope
     open-pull-requests-limit: 2
     target-branch: main
@@ -25,7 +25,7 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: update-docker-image
+      prefix: fix
       include: scope
     open-pull-requests-limit: 2
     target-branch: main
