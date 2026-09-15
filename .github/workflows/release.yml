@@ -49,6 +49,7 @@ jobs:
           minorList: feat
           patchList: fix, perf
           maxTagsToFetch: 50
+          skipInvalidTags: true
           noNewCommitBehavior: silent
           noVersionBumpBehavior: silent
 
