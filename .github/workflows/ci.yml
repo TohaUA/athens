@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOLANGCI_LINT_VERSION: v2.11.4
 
@@ -44,7 +44,7 @@ jobs:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ATHENS_MONGO_STORAGE_URL: mongodb://localhost:27017
       ATHENS_MINIO_ENDPOINT: http://localhost:9000
@@ -140,7 +140,7 @@ jobs:
         run: make test-e2e
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
