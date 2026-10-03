@@ -20,6 +20,7 @@ import (
 // reach out to for storage operations.
 func NewServer(strg storage.Backend) http.Handler {
 	r := mux.NewRouter()
+	registerToolchainStorage(r, strg)
 	r.HandleFunc(download.PathList, func(w http.ResponseWriter, r *http.Request) {
 		mod, err := paths.GetModule(r)
 		if err != nil {
