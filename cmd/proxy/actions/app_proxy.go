@@ -157,7 +157,8 @@ func getSingleFlight(l *log.Logger, c *config.Config, s storage.Backend, checker
 			c.SingleFlight.Redis.Password,
 			c.SingleFlight.Redis.Cluster,
 			checker,
-			c.SingleFlight.Redis.LockConfig)
+			c.SingleFlight.Redis.LockConfig,
+		)
 	case "redis-sentinel":
 		if c.SingleFlight == nil || c.SingleFlight.RedisSentinel == nil {
 			return nil, errors.New("redis config must be present")
