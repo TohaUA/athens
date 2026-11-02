@@ -160,7 +160,7 @@ func defaultConfig() *Config {
 		EnablePprof:           false,
 		PprofPort:             ":3001",
 		StatsExporter:         "prometheus",
-		TimeoutConf:           TimeoutConf{Timeout: 300},
+		Timeout:               300,
 		HomeTemplatePath:      "/var/lib/athens/home.html",
 		StorageType:           "memory",
 		Port:                  ":3000",
