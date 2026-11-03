@@ -307,6 +307,12 @@ func getConfigLines(filterFile string) ([]string, error) {
 	for scanner.Scan() {
 		lines = append(lines, strings.TrimSpace(scanner.Text()))
 	}
+	// A scan error (e.g. bufio.ErrTooLong for a line over 64KB) would otherwise
+	// silently drop every later rule, failing open on an access-control file.
+	if err := scanner.Err(); err != nil {
+		_ = f.Close()
+		return nil, errors.E(op, err)
+	}
 
 	return lines, f.Close()
 }
