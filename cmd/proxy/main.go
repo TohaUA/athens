@@ -53,8 +53,10 @@ func newServer(handler http.Handler) *http.Server {
 // timeout to finish. A failure (such as the timeout elapsing) is returned, and
 // any connections still open are closed so that no handler is left running
 // when the caller goes on to clean up.
-func shutdownServer(srv shutdowner, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func shutdownServer(parent context.Context, srv shutdowner, timeout time.Duration) error {
+	// The parent is usually the already-cancelled signal context, so detach from
+	// its cancellation and deadline while keeping its values.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), timeout)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		_ = srv.Close()
@@ -68,6 +70,39 @@ func exitCode(err error) int {
 		return 1
 	}
 	return 0
+}
+
+// shutdownLogger is the part of the application logger waitForShutdown needs.
+type shutdownLogger interface {
+	Infof(format string, args ...any)
+	Errorf(format string, args ...any)
+}
+
+// waitForShutdown blocks until a shutdown signal arrives on signalCtx or a
+// background component reports a failure on fatal, then shuts srv down. It
+// returns the process exit code: non-zero if a component failed or the
+// shutdown itself failed. Either way the server has been shut down by the time
+// it returns, so the caller's deferred cleanup runs with no handler in flight.
+// stopSignals is called as soon as the wait ends, before the shutdown begins.
+func waitForShutdown(signalCtx context.Context, stopSignals func(), fatal <-chan error, srv shutdowner, timeout time.Duration, log shutdownLogger) int {
+	var fatalErr error
+	select {
+	case <-signalCtx.Done():
+	case fatalErr = <-fatal:
+		log.Errorf("%v", fatalErr)
+	}
+
+	// Release the signal handler now so that a second SIGINT/SIGTERM terminates
+	// the process as usual instead of being swallowed while requests drain.
+	stopSignals()
+
+	log.Infof("Shutting down server")
+
+	shutdownErr := shutdownServer(signalCtx, srv, timeout)
+	if shutdownErr != nil {
+		log.Errorf("%v", shutdownErr)
+	}
+	return exitCode(errors.Join(fatalErr, shutdownErr))
 }
 
 // main only turns run's result into an exit status, so that the deferred
@@ -112,18 +147,26 @@ func run() int {
 
 	if *verifyStorage {
 		if err := actions.RunVerify(conf, *purge, os.Stdout); err != nil {
-			logger.Fatalf("verify-storage failed: %v", err)
+			logger.Errorf("verify-storage failed: %v", err)
+			return 1
 		}
 		return 0
 	}
 
+	// App returns a usable cleanup func even when it fails, so defer it before
+	// checking the error: a failed start must still flush traces and stats.
 	handler, cleanup, err := actions.App(logger, conf)
-	if err != nil {
-		logger.Fatalf("Could not create App: %v", err)
-	}
 	defer cleanup()
+	if err != nil {
+		logger.Errorf("Could not create App: %v", err)
+		return 1
+	}
 
 	srv := newServer(handler)
+
+	// fatal collects failures from the goroutines below. Buffered so they never
+	// block, whatever state the main flow is in.
+	fatal := make(chan error, 2)
 
 	if conf.EnablePprof {
 		go func() {
@@ -131,7 +174,7 @@ func run() int {
 			// not to expose profiling data and avoid DoS attacks (profiling slows down the service)
 			// https://www.farsightsecurity.com/txt-record/2016/10/28/cmikk-go-remote-profiling/
 			logger.WithFields(map[string]any{"port": conf.PprofPort}).Infof("starting pprof")
-			logger.Fatalf("pprof server failed: %v", http.ListenAndServe(conf.PprofPort, nil)) //nolint:gosec // This should not be exposed to the world.
+			fatal <- fmt.Errorf("pprof server failed: %w", http.ListenAndServe(conf.PprofPort, nil)) //nolint:gosec // This should not be exposed to the world.
 		}()
 	}
 
@@ -144,7 +187,8 @@ func run() int {
 		//nolint:noctx
 		ln, err = net.Listen("unix", conf.UnixSocket)
 		if err != nil {
-			logger.Fatalf("Could not listen on Unix domain socket %q: %v", conf.UnixSocket, err)
+			logger.Errorf("Could not listen on Unix domain socket %q: %v", conf.UnixSocket, err)
+			return 1
 		}
 	} else {
 		logger.WithFields(map[string]any{"tcpPort": conf.Port}).Infof("Starting application")
@@ -152,34 +196,26 @@ func run() int {
 		//nolint:noctx
 		ln, err = net.Listen("tcp", conf.Port)
 		if err != nil {
-			logger.Fatalf("Could not listen on TCP port %q: %v", conf.Port, err)
+			logger.Errorf("Could not listen on TCP port %q: %v", conf.Port, err)
+			return 1
 		}
 	}
 
 	signalCtx, signalStop := signal.NotifyContext(context.Background(), shutdown.GetSignals()...)
+	defer signalStop()
 
 	go func() {
-		defer signalStop()
+		var serveErr error
 		if conf.TLSCertFile != "" && conf.TLSKeyFile != "" {
-			err = srv.ServeTLS(ln, conf.TLSCertFile, conf.TLSKeyFile)
+			serveErr = srv.ServeTLS(ln, conf.TLSCertFile, conf.TLSKeyFile)
 		} else {
-			err = srv.Serve(ln)
+			serveErr = srv.Serve(ln)
 		}
 
-		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatalf("Could not start server: %v", err)
+		if !errors.Is(serveErr, http.ErrServerClosed) {
+			fatal <- fmt.Errorf("server failed: %w", serveErr)
 		}
 	}()
 
-	// Wait for shutdown signal, then cleanup before exit.
-	<-signalCtx.Done()
-	logger.Infof("Shutting down server")
-
-	// We received an interrupt signal, shut down. On failure, log it and exit
-	// non-zero; the deferred cleanup still runs before the process exits.
-	shutdownErr := shutdownServer(srv, time.Second*time.Duration(conf.ShutdownTimeout))
-	if shutdownErr != nil {
-		logger.Errorf("%v", shutdownErr)
-	}
-	return exitCode(shutdownErr)
+	return waitForShutdown(signalCtx, signalStop, fatal, srv, time.Second*time.Duration(conf.ShutdownTimeout), logger)
 }
