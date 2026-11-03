@@ -28,7 +28,55 @@ var (
 	purge         = flag.Bool("purge", false, "With -verify-storage, delete the mismatched module versions (requires -verify-storage)")
 )
 
+// idleTimeout bounds how long an idle keep-alive connection is kept open.
+//
+// There is deliberately no ReadTimeout or WriteTimeout: Athens streams large
+// module zips and serves long synchronous downloads, and those server-wide
+// whole-request timeouts would cut them off.
+const idleTimeout = 2 * time.Minute
+
+// shutdowner is the part of *http.Server needed to shut it down.
+type shutdowner interface {
+	Shutdown(ctx context.Context) error
+	Close() error
+}
+
+func newServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 2 * time.Second,
+		IdleTimeout:       idleTimeout,
+	}
+}
+
+// shutdownServer gracefully shuts srv down, giving in-flight requests up to
+// timeout to finish. A failure (such as the timeout elapsing) is returned, and
+// any connections still open are closed so that no handler is left running
+// when the caller goes on to clean up.
+func shutdownServer(srv shutdowner, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		_ = srv.Close()
+		return fmt.Errorf("could not shut down server: %w", err)
+	}
+	return nil
+}
+
+func exitCode(err error) int {
+	if err != nil {
+		return 1
+	}
+	return 0
+}
+
+// main only turns run's result into an exit status, so that the deferred
+// cleanup in run always executes before the process exits.
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	flag.Parse()
 	if err := actions.ValidateVerifyFlags(*verifyStorage, *purge); err != nil {
 		stdlog.Fatalf("%v", err)
@@ -66,7 +114,7 @@ func main() {
 		if err := actions.RunVerify(conf, *purge, os.Stdout); err != nil {
 			logger.Fatalf("verify-storage failed: %v", err)
 		}
-		return
+		return 0
 	}
 
 	handler, cleanup, err := actions.App(logger, conf)
@@ -75,10 +123,7 @@ func main() {
 	}
 	defer cleanup()
 
-	srv := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: 2 * time.Second,
-	}
+	srv := newServer(handler)
 
 	if conf.EnablePprof {
 		go func() {
@@ -130,10 +175,11 @@ func main() {
 	<-signalCtx.Done()
 	logger.Infof("Shutting down server")
 
-	// We received an interrupt signal, shut down.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(conf.ShutdownTimeout))
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Fatalf("Could not shut down server: %v", err)
+	// We received an interrupt signal, shut down. On failure, log it and exit
+	// non-zero; the deferred cleanup still runs before the process exits.
+	shutdownErr := shutdownServer(srv, time.Second*time.Duration(conf.ShutdownTimeout))
+	if shutdownErr != nil {
+		logger.Errorf("%v", shutdownErr)
 	}
+	return exitCode(shutdownErr)
 }

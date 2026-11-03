@@ -56,12 +56,28 @@ func (s *withsf) Stash(ctx context.Context, mod, ver string) (string, error) {
 	_, inFlight := s.subs[mv]
 	if !inFlight {
 		s.subs[mv] = []chan *sfResp{subCh}
-		go s.process(ctx, mod, ver)
+		// The work is shared by every subscriber, so it must not be
+		// cancelled just because the waiter that started it went away.
+		// WithoutCancel also drops the deadline, so carry it over: the flight
+		// stays bounded and a hung stash cannot wedge this module@version.
+		workCtx, cancelWork := context.WithoutCancel(ctx), context.CancelFunc(func() {})
+		if deadline, ok := ctx.Deadline(); ok {
+			workCtx, cancelWork = context.WithDeadline(workCtx, deadline)
+		}
+		go func() {
+			defer cancelWork()
+			s.process(workCtx, mod, ver)
+		}()
 	} else {
 		s.subs[mv] = append(s.subs[mv], subCh)
 	}
 	s.mu.Unlock()
 
-	resp := <-subCh
-	return resp.newVer, resp.err
+	// subCh is buffered, so process never blocks on a waiter that has left.
+	select {
+	case resp := <-subCh:
+		return resp.newVer, resp.err
+	case <-ctx.Done():
+		return "", errors.E(op, ctx.Err())
+	}
 }

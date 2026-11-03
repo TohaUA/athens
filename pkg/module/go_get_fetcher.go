@@ -54,7 +54,7 @@ func NewGoGetFetcher(goBinaryName, gogetDir string, envVars []string, fs afero.F
 
 // Fetch downloads the sources from the go binary and returns the corresponding
 // .info, .mod, and .zip files.
-func (g *goGetFetcher) Fetch(ctx context.Context, mod, ver string) (*storage.Version, error) {
+func (g *goGetFetcher) Fetch(ctx context.Context, mod, ver string) (_ *storage.Version, err error) {
 	const op errors.Op = "goGetFetcher.Fetch"
 	ctx, span := observ.StartSpan(ctx, op.String())
 	defer span.End()
@@ -64,10 +64,17 @@ func (g *goGetFetcher) Fetch(ctx context.Context, mod, ver string) (*storage.Ver
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
+	// On success, ownership of goPathRoot transfers to the returned zipReadCloser,
+	// which clears it on Close. On every error return, clean it up here.
+	defer func() {
+		if err != nil {
+			_ = clearFiles(g.fs, goPathRoot)
+		}
+	}()
+
 	sourcePath := filepath.Join(goPathRoot, "src")
 	modPath := filepath.Join(sourcePath, getRepoDirName(mod, ver))
 	if err := g.fs.MkdirAll(modPath, os.ModeDir|os.ModePerm); err != nil {
-		_ = clearFiles(g.fs, goPathRoot)
 		return nil, errors.E(op, err)
 	}
 
@@ -81,7 +88,6 @@ func (g *goGetFetcher) Fetch(ctx context.Context, mod, ver string) (*storage.Ver
 		ver,
 	)
 	if err != nil {
-		_ = clearFiles(g.fs, goPathRoot)
 		return nil, errors.E(op, err)
 	}
 
