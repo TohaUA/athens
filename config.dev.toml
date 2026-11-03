@@ -261,6 +261,30 @@ SumDBs = ["https://sum.golang.org"]
 # Env override: ATHENS_GONOSUM_PATTERNS
 NoSumPatterns = []
 
+# Go release downloads use the configured StorageType under <athens-url>/dl/.
+# Setting a URL also enables the feature for compatibility. Offline mirrors
+# can instead set GoDownloadEnabled=true with no upstream URL.
+# Env override: ATHENS_GO_DOWNLOAD_ENABLED
+GoDownloadEnabled = false
+# Env override: ATHENS_GO_DOWNLOAD_URL
+GoDownloadURL = ""
+# Stable distribution identity. Defaults to the upstream base URL, or
+# https://go.dev/dl when no URL is configured. Preserve it for offline reuse.
+# Env override: ATHENS_GO_DOWNLOAD_SOURCE
+GoDownloadSource = ""
+# Defaults to the global/default DownloadMode; module-path overrides do not
+# apply to release archives. Supports sync, none, async, redirect, async_redirect.
+# Env override: ATHENS_GO_DOWNLOAD_MODE
+GoDownloadMode = ""
+# Release-compatible redirect base, defaulting to GoDownloadURL. Module
+# DownloadURL is not used for toolchain archives.
+# Env override: ATHENS_GO_DOWNLOAD_REDIRECT_URL
+GoDownloadRedirectURL = ""
+# Upstream listing TTL in seconds. NetworkMode controls refresh failures.
+# Offline and none always use committed local archive inventory.
+# Env override: ATHENS_GO_DOWNLOAD_LISTING_TTL
+GoDownloadListingTTL = 7200
+
 # DownloadMode defines how Athens behaves when a module@version
 # is not found in storage. There are 4 options:
 # 1. "sync" (default): download the module synchronously and
@@ -271,7 +295,8 @@ NoSumPatterns = []
 # with the base URL as the DownloadRedirectURL from below.
 # 4. "async_redirect": same as option number 3 but it will
 # asynchronously store the module to the backend.
-# 5. "none": return 404 if a module is not found and do nothing.
+# 5. "none": return 404 for missing versions without fetching. Version discovery
+# uses cached tags and commit metadata; see /configuration/network-mode in the docs.
 # 6. "file:<path>": will point to an HCL file that specifies
 # any of the 5 options above based on different import paths.
 # 7. "custom:<base64-encoded-hcl>" is the same as option 6
@@ -281,17 +306,18 @@ NoSumPatterns = []
 # Env override: ATHENS_DOWNLOAD_MODE
 DownloadMode = "sync"
 
-# NetworkMode configures how Athens will return the results
-# of the /list endpoint as it can be assembled from both its own
-# storage and the upstream VCS.
+# NetworkMode controls version discovery through /@v/list and /@latest,
+# using Athens storage and the upstream VCS. DownloadMode separately controls
+# fetching missing versioned artifacts. For a fully offline module proxy, use
+# NetworkMode = "offline" together with DownloadMode = "none".
 # 
 # Note, that for better error messaging, this would also affect how other
 # endpoints behave.
 # 
 # Modes:
 # 1. strict: merge VCS versions with storage versions, but fail if either of them fails.
-# 2. offline: only get storage versions, never reach out to VCS.
-# 3. fallback: only return storage versions, if VCS fails. Note this means that you may
+# 2. offline: list cached tags and return cached latest metadata without VCS lookups.
+# 3. fallback: use cached discovery results if VCS fails. Note this means that you may
 # see inconsistent results since fallback mode does a best effort of giving you what's
 # available at the time of requesting versions.
 # Env override: ATHENS_NETWORK_MODE
@@ -308,6 +334,8 @@ DownloadURL = ""
 # "public, max-age=31536000, immutable" lets a caching proxy in front of
 # Athens serve them without hitting Athens again. When empty, no Cache-Control
 # header is set on these endpoints, which is the default behavior.
+# Release archive endpoints also use this setting, defaulting to private, no-cache
+# when empty. Only set public caching if unauthenticated sharing is intended.
 # Env override: ATHENS_CACHE_CONTROL
 CacheControl = ""
 
