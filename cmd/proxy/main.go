@@ -164,9 +164,9 @@ func run() int {
 
 	srv := newServer(handler)
 
-	// fatal collects failures from the goroutines below. Buffered so they never
-	// block, whatever state the main flow is in.
-	fatal := make(chan error, 2)
+	// fatal collects the failure of the main listener, which must stop the proxy.
+	// Buffered so the sender never blocks, whatever state the main flow is in.
+	fatal := make(chan error, 1)
 
 	if conf.EnablePprof {
 		go func() {
@@ -174,7 +174,10 @@ func run() int {
 			// not to expose profiling data and avoid DoS attacks (profiling slows down the service)
 			// https://www.farsightsecurity.com/txt-record/2016/10/28/cmikk-go-remote-profiling/
 			logger.WithFields(map[string]any{"port": conf.PprofPort}).Infof("starting pprof")
-			fatal <- fmt.Errorf("pprof server failed: %w", http.ListenAndServe(conf.PprofPort, nil)) //nolint:gosec // This should not be exposed to the world.
+			// pprof is optional diagnostics: its failure is logged but must not take
+			// the proxy down. ListenAndServe only ever returns a non-nil error.
+			err := http.ListenAndServe(conf.PprofPort, nil) //nolint:gosec // This should not be exposed to the world.
+			logger.Errorf("pprof server failed: %v", err)
 		}()
 	}
 
