@@ -94,12 +94,12 @@ func TestWaitForShutdownSignal(t *testing.T) {
 	}
 }
 
-// A failure in a background goroutine (listener, pprof) must stop the proxy
+// A failure of the main listener must stop the proxy
 // with a non-zero code, but by returning so the caller's cleanup still runs,
 // not by exiting on the spot.
 func TestWaitForShutdownFatalError(t *testing.T) {
 	fatal := make(chan error, 1)
-	fatal <- errors.New("pprof server failed: boom")
+	fatal <- errors.New("server failed: boom")
 	f := &fakeShutdowner{}
 	log := &fakeLogger{}
 
