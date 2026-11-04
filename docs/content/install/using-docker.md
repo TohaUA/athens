@@ -61,23 +61,62 @@ docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
    gomods/athens:latest
 ```
 
-## Non-Root User
+## Running as a non-root user
 
-The Athens docker images comes with a non-root user `athens` with `uid: 1000`, `gid: 1000` and home directory `/home/athens`.
-In situations where running as root is not permitted, this user can be used instead. In all other instructions
-replace `/root/` with `/home/athens/` and set the user and group ids in the run environment to `1000`.
+The Athens Docker image runs as the non-root user `athens` (`uid: 1000`, `gid: 1000`) with the home
+directory `/home/athens`. The proxy and the `go`, `git`, `hg` and `ssh` processes it starts never run as root.
+You do not need to pass `-u`.
+
+> **Breaking change for existing deployments.** Older images ran as root and read credentials from
+> `/root/`. Mount credential files under `/home/athens/` instead, for example `/home/athens/.netrc`,
+> `/home/athens/.gitconfig`, `/home/athens/.ssh` and `/home/athens/.hgrc`.
 
 ```shell
 docker run -d -v $ATHENS_STORAGE:/var/lib/athens \
    -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens \
    -e ATHENS_STORAGE_TYPE=disk \
-   -v "$PWD/gitconfig/.gitconfig:/home/athens/.gitconfig" \
+   -v "$PWD/gitconfig/.gitconfig:/home/athens/.gitconfig:ro" \
    --name athens-proxy \
    --restart always \
    -p 3000:3000 \
-   -u 1000:1000 \
    gomods/athens:latest
 ```
+
+**Mounted files must be readable by the `athens` user.** A file or directory bind-mounted from the host keeps
+its host owner and permissions, so a `0600` file owned by your own user is not readable inside the container.
+Find the uid and gid of the image's user with:
+
+```shell
+docker run --rm --entrypoint id gomods/athens:latest
+# uid=1000(athens) gid=1000(athens) groups=1000(athens)
+```
+
+Then make the mounted files readable by that uid, for example:
+
+```shell
+chown 1000:1000 gitconfig/.gitconfig
+chown -R 1000:1000 ssh-keys && chmod 700 ssh-keys && chmod 600 ssh-keys/id_rsa
+```
+
+`ssh` refuses private keys that are accessible by other users, so keep keys at `0600` and owned by uid `1000`.
+For secrets mounted in Kubernetes, set `securityContext.fsGroup: 1000` (or `runAsUser: 1000`) and a `defaultMode`
+such as `0440` so the files are readable by the `athens` user.
+
+**Volumes created by an older image are owned by root.** The image pre-creates `/var/lib/athens` owned by
+`athens`, so a new Docker named volume mounted there is writable out of the box. A bind mount, or a volume that
+was populated by a previous root-running container, keeps its old owner and Athens will fail to write to it.
+Hand it to the `athens` user once:
+
+```shell
+# bind mount on the host
+sudo chown -R 1000:1000 "$ATHENS_STORAGE"
+
+# existing named volume
+docker run --rm -u 0 -v athens-storage:/var/lib/athens --entrypoint chown \
+   gomods/athens:latest -R 1000:1000 /var/lib/athens
+```
+
+If you must keep running as root, for instance while migrating, pass `-u 0 -e HOME=/root` and keep using the `/root/` paths. Running as root is not recommended.
 
 ## Troubleshooting Athens in Docker
 

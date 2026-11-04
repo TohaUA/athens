@@ -54,11 +54,35 @@ RUN apk -U upgrade && \
 # Add git-credential-github-app for native integration with GitHub Apps
 COPY --from=builder /bin/git-credential-github-app /usr/local/bin/git-credential-github-app
 
+# Run as an unprivileged user. The proxy and the go/git/hg/ssh processes it
+# spawns do not need root. Credentials mounted into the container belong under
+# /home/athens (for example /home/athens/.netrc or /home/athens/.ssh) and must
+# be readable by uid 1000.
 ARG USER=athens
-RUN adduser -D -h /home/$USER $USER
+ARG UID=1000
+ARG GID=1000
+
+# Pre-create the directories that hold writable state and hand them to the
+# athens user, so that a Docker named volume mounted on one of them for the
+# first time inherits athens ownership.
+#   /var/lib/athens      disk storage root (ATHENS_DISK_STORAGE_ROOT)
+#   /home/athens/go      default GOPATH/GOMODCACHE location under HOME
+#   /home/athens/.cache  default GOCACHE location under HOME
+# Per-request GOPATH/GOCACHE live under GoGetDir, which defaults to /tmp.
+RUN addgroup -g $GID $USER && \
+    adduser -D -u $UID -G $USER -h /home/$USER $USER && \
+    mkdir -p /var/lib/athens /home/$USER/go /home/$USER/.cache && \
+    chown -R $UID:$GID /var/lib/athens /home/$USER
+
+ENV HOME=/home/$USER
 
 EXPOSE 3000
 
 ENTRYPOINT [ "/sbin/tini", "--" ]
 
 CMD ["athens-proxy", "-config_file=/config/config.toml"]
+
+# Keep this as the last instruction, after every step that needs root.
+# Use the numeric uid:gid so that Kubernetes `runAsNonRoot: true` can verify it
+# without an explicit runAsUser.
+USER $UID:$GID
