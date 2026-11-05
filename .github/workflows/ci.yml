@@ -182,3 +182,18 @@ jobs:
           args: release --clean --snapshot
         env:
           DATE: ${{ steps.date.outputs.date }}
+
+  docker:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The image is otherwise only built by the release workflow, which pushes it.
+      # Build it here without pushing so Dockerfile changes are exercised before release.
+      - name: Build image
+        run: docker build -f cmd/proxy/Dockerfile --build-arg VERSION=ci -t athens-proxy:ci .
+
+      - name: Smoke test image
+        run: ./scripts/test_docker_image.sh athens-proxy:ci

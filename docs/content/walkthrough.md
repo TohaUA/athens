@@ -118,6 +118,8 @@ docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
    gomods/athens:latest
 ```
 
+> **Note:** The Athens image runs as the non-root user `athens` (uid `1000`), so the storage directory must be writable by uid `1000`. If you see permission errors on Linux, run `sudo chown -R 1000:1000 $ATHENS_STORAGE`. See [Running as a non-root user](/install/using-docker/#running-as-a-non-root-user).
+
 Next, you will need to enable the [Go Modules](https://github.com/golang/go/wiki/Modules)
 feature and configure Go to use the Athens proxy!
 

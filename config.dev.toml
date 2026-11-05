@@ -60,7 +60,9 @@ GoGetWorkers = 10
 # Kubernetes environment where a specific path is volumed into 
 # a directory that has larger disk resources. If the value is
 # empty, Athens will use the default OS temporary directory.
-# 
+# The official Docker image runs as the non-root user "athens" (uid 1000),
+# so the directory must be writable by that user.
+#
 # Env override: ATHENS_GOGET_DIR
 GoGetDir = ""
 
@@ -91,9 +93,21 @@ CloudRuntime = "none"
 # EnablePprof specifies if the pprof endpoints should be exposed.
 # Note that this option is not meant to be activated forever on a server
 # and should be desactivated once not needed.
+#
+# SECURITY WARNING: pprof has no authentication, and heap and goroutine
+# profiles can contain secrets held in memory (for example credentials,
+# tokens and passwords). Never expose the pprof port publicly. Bind it to
+# loopback (for example PprofPort = "127.0.0.1:3001") or restrict network
+# access to it with firewall rules or network policies, and turn it off
+# again when you are done.
 EnablePprof = false
 
-# PprofPort specifies the port on which pprof will be exposed if activated.
+# PprofPort specifies the address on which pprof will be exposed if activated.
+# A bare port such as ":3001" listens on ALL network interfaces. Prefer
+# "127.0.0.1:3001" (see the security warning above). In a container, loopback
+# is only reachable from inside the container, for example with
+# "docker exec" or "kubectl port-forward"; do not publish this port.
+# Env override: ATHENS_PPROF_PORT
 PprofPort = ":3001"
 
 # The filename for the include exclude filter.
@@ -486,6 +500,9 @@ ShutdownTimeout = 60
 
     [Storage.Disk]
         # RootPath is the Athens Disk Root folder
+        # In the official Docker image use /var/lib/athens, which is owned by
+        # the non-root "athens" user. Other mounted paths must be writable by
+        # uid 1000.
         # Env override: ATHENS_DISK_STORAGE_ROOT
         RootPath = "/path/on/disk"
 
