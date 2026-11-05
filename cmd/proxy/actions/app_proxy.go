@@ -146,10 +146,28 @@ func (l *athensLoggerForRedis) Printf(_ context.Context, format string, v ...any
 	l.logger.Infof(format, v...)
 }
 
+// getSingleFlight returns the wrapper that keeps concurrent requests for the
+// same module version from stashing it more than once.
+//
+// With a distributed type, concurrent requests on one instance are also
+// coalesced in memory in front of the distributed lock, so each instance enters
+// the lock once per module version at a time and shares the outcome, instead of
+// its requests queueing for the lock one after another.
 func getSingleFlight(l *log.Logger, c *config.Config, s storage.Backend, checker storage.Checker) (stash.Wrapper, error) {
-	switch c.SingleFlightType {
-	case "", "memory":
+	if c.SingleFlightType == "" || c.SingleFlightType == "memory" {
 		return stash.WithSingleflight, nil
+	}
+	distributed, err := newDistributedSingleFlight(l, c, s, checker)
+	if err != nil {
+		return nil, err
+	}
+	return stash.WithLocalSingleflight(distributed), nil
+}
+
+// newDistributedSingleFlight returns the lock wrapper for a distributed
+// SingleFlightType.
+func newDistributedSingleFlight(l *log.Logger, c *config.Config, s storage.Backend, checker storage.Checker) (stash.Wrapper, error) {
+	switch c.SingleFlightType {
 	case "etcd":
 		if c.SingleFlight == nil || c.SingleFlight.Etcd == nil {
 			return nil, errors.New("etcd config must be present")

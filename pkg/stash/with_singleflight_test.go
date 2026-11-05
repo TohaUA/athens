@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -197,5 +198,128 @@ func TestSingleFlightWaiterCancel(t *testing.T) {
 			t.Fatalf("expected subs map to be empty, has %d entries", n)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// countingWrapper is a stand-in for a distributed lock wrapper: it counts how
+// many times a call gets through to it.
+func countingWrapper(calls *atomic.Int32) Wrapper {
+	return func(s Stasher) Stasher {
+		return stasherFunc(func(ctx context.Context, mod, ver string) (string, error) {
+			calls.Add(1)
+			return s.Stash(ctx, mod, ver)
+		})
+	}
+}
+
+type stasherFunc func(ctx context.Context, mod, ver string) (string, error)
+
+func (f stasherFunc) Stash(ctx context.Context, mod, ver string) (string, error) {
+	return f(ctx, mod, ver)
+}
+
+// waitForSubscribers blocks until n callers are waiting on the same module@version.
+func waitForSubscribers(t *testing.T, s Stasher, n int) {
+	t.Helper()
+	impl, ok := s.(*withsf)
+	if !ok {
+		t.Fatalf("unexpected stasher type %T", s)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		impl.mu.Lock()
+		got := 0
+		for _, chs := range impl.subs {
+			got += len(chs)
+		}
+		impl.mu.Unlock()
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of %d callers subscribed", got, n)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestLocalSingleflightCoalescesBeforeDistributed ensures that concurrent
+// callers on one instance enter the distributed layer once, not once each.
+func TestLocalSingleflightCoalescesBeforeDistributed(t *testing.T) {
+	const callers = 10
+	var distributed, inner atomic.Int32
+	release := make(chan struct{})
+	base := stasherFunc(func(context.Context, string, string) (string, error) {
+		inner.Add(1)
+		<-release
+		return "real", nil
+	})
+	s := WithLocalSingleflight(countingWrapper(&distributed))(base)
+
+	results := make([]sfResult, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() {
+			v, err := s.Stash(t.Context(), "mod", "ver")
+			results[i] = sfResult{v, err}
+		})
+	}
+	waitForSubscribers(t, s, callers)
+	close(release)
+	wg.Wait()
+
+	for i, r := range results {
+		if r.err != nil || r.ver != "real" {
+			t.Fatalf("caller %d got %+v", i, r)
+		}
+	}
+	if got := distributed.Load(); got != 1 {
+		t.Fatalf("distributed layer entered %d times, want 1", got)
+	}
+	if got := inner.Load(); got != 1 {
+		t.Fatalf("stash ran %d times, want 1", got)
+	}
+}
+
+// TestLocalSingleflightSharesFailureThenRetries ensures a failed stash is
+// reported to every concurrent caller from one attempt, and that the failure
+// is not remembered: the next call tries again.
+func TestLocalSingleflightSharesFailureThenRetries(t *testing.T) {
+	const callers = 5
+	var distributed, inner atomic.Int32
+	release := make(chan struct{})
+	base := stasherFunc(func(context.Context, string, string) (string, error) {
+		if inner.Add(1) == 1 {
+			<-release
+			return "", errors.New("boom")
+		}
+		return "real", nil
+	})
+	s := WithLocalSingleflight(countingWrapper(&distributed))(base)
+
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() { _, errs[i] = s.Stash(t.Context(), "mod", "ver") })
+	}
+	waitForSubscribers(t, s, callers)
+	close(release)
+	wg.Wait()
+
+	for i, err := range errs {
+		if err == nil || err.Error() != "boom" {
+			t.Fatalf("caller %d got %v, want boom", i, err)
+		}
+	}
+	if got := distributed.Load(); got != 1 {
+		t.Fatalf("distributed layer entered %d times for the failing flight, want 1", got)
+	}
+
+	v, err := s.Stash(t.Context(), "mod", "ver")
+	if err != nil || v != "real" {
+		t.Fatalf("retry after the failed flight got (%q, %v)", v, err)
+	}
+	if got := distributed.Load(); got != 2 {
+		t.Fatalf("distributed layer entered %d times in total, want 2", got)
 	}
 }

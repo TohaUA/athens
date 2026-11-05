@@ -22,6 +22,22 @@ func WithSingleflight(s Stasher) Stasher {
 	return sf
 }
 
+// WithLocalSingleflight returns a Wrapper that applies the distributed wrapper
+// and then coalesces, in this process, concurrent calls for the same
+// module@version in front of it. They share one call into distributed, so they
+// take its lock once and share its result and its error, instead of queueing up
+// for the lock one after another and each retrying a failed stash in turn.
+//
+// The flight is detached from the callers' cancellation: it keeps going, up to
+// the first caller's deadline, when every caller has gone. That includes
+// waiting for the distributed lock, which a lone caller would previously have
+// given up on as soon as it disconnected.
+func WithLocalSingleflight(distributed Wrapper) Wrapper {
+	return func(s Stasher) Stasher {
+		return WithSingleflight(distributed(s))
+	}
+}
+
 type sfResp struct {
 	newVer string
 	err    error
