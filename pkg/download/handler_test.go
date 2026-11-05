@@ -157,3 +157,30 @@ func TestCacheControl(t *testing.T) {
 		})
 	}
 }
+
+// countingWriter records how many times the handler writes a body.
+type countingWriter struct {
+	http.ResponseWriter
+	writes int
+}
+
+func (w *countingWriter) Write(b []byte) (int, error) {
+	w.writes++
+	return w.ResponseWriter.Write(b)
+}
+
+// An error status is the whole response: the info handler must not go on to
+// write a (nil) body after it.
+func TestInfoHandlerWritesNoBodyOnError(t *testing.T) {
+	r := mux.NewRouter()
+	RegisterHandlers(r, &HandlerOpts{
+		Protocol:     notFoundProtocol{},
+		Logger:       log.NoOpLogger(),
+		DownloadFile: &mode.DownloadFile{Mode: mode.Sync},
+	})
+	w := &countingWriter{ResponseWriter: httptest.NewRecorder()}
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/github.com/gomods/athens/@v/v0.4.0.info", nil))
+	if w.writes != 0 {
+		t.Fatalf("expected no body write after the error status, got %d", w.writes)
+	}
+}

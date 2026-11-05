@@ -338,8 +338,10 @@ DownloadURL = ""
 # as 404 are sent as "no-cache, no-store, must-revalidate", so a proxy never
 # keeps them. When empty, no Cache-Control header is set on these endpoints,
 # which is the default behavior.
-# Release archive endpoints also use this setting, defaulting to private, no-cache
-# when empty. Only set public caching if unauthenticated sharing is intended.
+# Release archive endpoints (/dl/) also use this setting, but not the rule above:
+# they send the value as is on every archive they serve (not on errors), with no
+# version check, defaulting to "private, no-cache" when empty. Only set public
+# caching if unauthenticated sharing is intended.
 # Env override: ATHENS_CACHE_CONTROL
 CacheControl = ""
 
