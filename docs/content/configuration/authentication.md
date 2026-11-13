@@ -317,6 +317,11 @@ $ docker run --rm -d \
     -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens -e ATHENS_STORAGE_TYPE=disk --name athens-proxy -p 3000:3000 gomods/athens:canary
 ```
 
+The image no longer runs as root, so the process inside the container (uid `1000`) must be allowed to connect to the
+mounted socket. The agent socket is normally `0600` and owned by your host user, whose uid is often not `1000`
+(for example `501` on macOS). If private fetches fail with `Permission denied (publickey)` (`ssh -v` shows `Error connecting to agent:
+Permission denied`), make the socket connectable by uid `1000`, or use key files as described above instead.
+
 ## GitHub Apps
 
 Instead of using a Machine User on GitHub, it is possible to create a GitHub App and authenticate via it. 

@@ -71,6 +71,24 @@ You do not need to pass `-u`.
 > `/root/`. Mount credential files under `/home/athens/` instead, for example `/home/athens/.netrc`,
 > `/home/athens/.gitconfig`, `/home/athens/.ssh` and `/home/athens/.hgrc`.
 
+**Mounted files must be readable by the `athens` user.** A file or directory bind-mounted from the host keeps
+its host owner and permissions, so a `0600` file owned by your own user is not readable inside the container,
+and `git` will silently ignore an unreadable `.gitconfig`. Find the uid and gid of the image's user with:
+
+```shell
+docker run --rm --entrypoint id gomods/athens:latest
+# uid=1000(athens) gid=1000(athens) groups=1000(athens)
+```
+
+Then make the mounted files readable by that uid (changing the owner to another user needs root on a Linux host):
+
+```shell
+sudo chown 1000:1000 gitconfig/.gitconfig
+sudo chown -R 1000:1000 ssh-keys && sudo chmod 700 ssh-keys && sudo chmod 600 ssh-keys/id_rsa
+```
+
+After this your own host user may no longer be able to read those files. Keep a copy, or set the owner on a copy that you mount instead.
+
 ```shell
 docker run -d -v $ATHENS_STORAGE:/var/lib/athens \
    -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens \
@@ -82,30 +100,42 @@ docker run -d -v $ATHENS_STORAGE:/var/lib/athens \
    gomods/athens:latest
 ```
 
-**Mounted files must be readable by the `athens` user.** A file or directory bind-mounted from the host keeps
-its host owner and permissions, so a `0600` file owned by your own user is not readable inside the container.
-Find the uid and gid of the image's user with:
-
-```shell
-docker run --rm --entrypoint id gomods/athens:latest
-# uid=1000(athens) gid=1000(athens) groups=1000(athens)
-```
-
-Then make the mounted files readable by that uid, for example:
-
-```shell
-chown 1000:1000 gitconfig/.gitconfig
-chown -R 1000:1000 ssh-keys && chmod 700 ssh-keys && chmod 600 ssh-keys/id_rsa
-```
-
 `ssh` refuses private keys that are accessible by other users, so keep keys at `0600` and owned by uid `1000`.
-For secrets mounted in Kubernetes, set `securityContext.fsGroup: 1000` (or `runAsUser: 1000`) and a `defaultMode`
-such as `0440` so the files are readable by the `athens` user.
+
+**Kubernetes secrets.** Files from a `Secret` volume are owned by root. `securityContext.runAsUser: 1000` alone does
+not make them readable, with `fsGroup: 1000` the kubelet makes them group-readable by gid `1000`. Use `fsGroup: 1000` with a `defaultMode` such
+as `0440` for `.netrc`, `.gitconfig` and SSH keys; `ssh` only rejects a key whose owner is the user running it, and
+the owner here is root. If your cluster or `ssh` setup still complains about key permissions, or you need the files
+owned by `athens`, mount the secret at a staging path and copy it with an init container into an `emptyDir`
+mounted at `/home/athens/.ssh`:
+
+```yaml
+initContainers:
+  - name: ssh-keys
+    image: busybox
+    command: ["sh", "-c", "cp /secret/* /ssh/ && chown 1000:1000 /ssh/* && chmod 600 /ssh/*"]
+    volumeMounts:
+      - { name: ssh-secret, mountPath: /secret, readOnly: true }
+      - { name: ssh, mountPath: /ssh }
+containers:
+  - name: athens
+    volumeMounts:
+      - { name: ssh, mountPath: /home/athens/.ssh }
+volumes:
+  - name: ssh-secret
+    secret: { secretName: athens-ssh, defaultMode: 0400 }
+  - name: ssh
+    emptyDir: {}
+```
+
+**ssh-agent.** If you mount the host's `SSH_AUTH_SOCK` socket, it is usually `0600` and owned by your host user,
+whose uid is rarely `1000`. The container user cannot connect to it, so private fetches fail with `Permission denied (publickey)` (`ssh -v` shows `Error connecting to agent: Permission
+denied`). Make the socket connectable by uid `1000` or use key files instead.
 
 **Volumes created by an older image are owned by root.** The image pre-creates `/var/lib/athens` owned by
 `athens`, so a new Docker named volume mounted there is writable out of the box. A bind mount, or a volume that
 was populated by a previous root-running container, keeps its old owner and Athens will fail to write to it.
-Hand it to the `athens` user once:
+Hand it to the `athens` user once (on Kubernetes, set `securityContext.fsGroup: 1000` on the pod instead):
 
 ```shell
 # bind mount on the host
@@ -116,7 +146,39 @@ docker run --rm -u 0 -v athens-storage:/var/lib/athens --entrypoint chown \
    gomods/athens:latest -R 1000:1000 /var/lib/athens
 ```
 
-If you must keep running as root, for instance while migrating, pass `-u 0 -e HOME=/root` and keep using the `/root/` paths. Running as root is not recommended.
+**Arbitrary user ids (for example OpenShift).** The image gives group `0` the same access as the owner on
+`/var/lib/athens` and `/home/athens`, so a container started with an arbitrary uid in group `0` can write to
+them. Such a uid has no `/etc/passwd` entry, so the runtime does not set `HOME` for it. Set it explicitly, because
+Athens writes `.netrc` and `.hgrc` under `$HOME`:
+
+```shell
+docker run -u 12345:0 -e HOME=/home/athens gomods/athens:latest
+```
+
+Without a passwd entry, `ssh` cannot run as that uid (for example `No user exists for uid 12345`), so on such platforms use
+HTTPS with a `.netrc` for private modules rather than SSH keys, or provide a passwd entry (for example with `nss_wrapper`).
+
+**Rolling back to root.** If you must keep running as root, for instance while migrating, run the container as
+root and keep using the `/root/` paths. `HOME` then resolves to `/root` on its own; the image does not hard-code it.
+Running as root is not recommended.
+
+```shell
+# Docker
+docker run -u 0 ... gomods/athens:latest
+```
+
+```yaml
+# docker-compose
+services:
+  athens:
+    user: "0"
+```
+
+```yaml
+# Kubernetes
+securityContext:
+  runAsUser: 0
+```
 
 ## Troubleshooting Athens in Docker
 

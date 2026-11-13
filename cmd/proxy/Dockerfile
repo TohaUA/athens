@@ -58,23 +58,28 @@ COPY --from=builder /bin/git-credential-github-app /usr/local/bin/git-credential
 # spawns do not need root. Credentials mounted into the container belong under
 # /home/athens (for example /home/athens/.netrc or /home/athens/.ssh) and must
 # be readable by uid 1000.
+#
+# HOME is deliberately not set here: the runtime derives it from /etc/passwd, so
+# uid 1000 gets /home/athens and `-u 0` / `runAsUser: 0` still gets /root, which
+# keeps a documented rollback path for existing /root credential mounts.
 ARG USER=athens
 ARG UID=1000
 ARG GID=1000
 
-# Pre-create the directories that hold writable state and hand them to the
-# athens user, so that a Docker named volume mounted on one of them for the
-# first time inherits athens ownership.
-#   /var/lib/athens      disk storage root (ATHENS_DISK_STORAGE_ROOT)
-#   /home/athens/go      default GOPATH/GOMODCACHE location under HOME
-#   /home/athens/.cache  default GOCACHE location under HOME
-# Per-request GOPATH/GOCACHE live under GoGetDir, which defaults to /tmp.
+# Pre-create the disk storage root (ATHENS_DISK_STORAGE_ROOT) and hand it to the
+# athens user, so that a Docker named volume mounted there for the first time
+# inherits athens ownership. Per-request GOPATH/GOCACHE live under GoGetDir,
+# which defaults to /tmp.
+#
+# Also give group 0 the same access as the owner (g=u) so platforms that run the
+# container with an arbitrary uid in group 0 (for example OpenShift) can write
+# here and to $HOME.
 RUN addgroup -g $GID $USER && \
     adduser -D -u $UID -G $USER -h /home/$USER $USER && \
-    mkdir -p /var/lib/athens /home/$USER/go /home/$USER/.cache && \
-    chown -R $UID:$GID /var/lib/athens /home/$USER
-
-ENV HOME=/home/$USER
+    mkdir -p /var/lib/athens && \
+    chown -R $UID:$GID /var/lib/athens /home/$USER && \
+    chgrp -R 0 /var/lib/athens /home/$USER && \
+    chmod -R g=u /var/lib/athens /home/$USER
 
 EXPOSE 3000
 
