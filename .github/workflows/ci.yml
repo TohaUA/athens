@@ -182,3 +182,33 @@ jobs:
           args: release --clean --snapshot
         env:
           DATE: ${{ steps.date.outputs.date }}
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # The image is otherwise only built by the release workflow, which pushes it.
+      # Build it here without pushing (load into the local daemon) so Dockerfile
+      # changes are exercised before release. This builds the runner's
+      # architecture only; the release workflow also builds arm64.
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: cmd/proxy/Dockerfile
+          build-args: VERSION=ci
+          tags: athens-proxy:ci
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test image
+        run: ./scripts/test_docker_image.sh athens-proxy:ci
