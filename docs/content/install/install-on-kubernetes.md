@@ -274,6 +274,12 @@ In order to instruct athens to fetch and use the secret, `netrc.enabled` flag mu
 helm install athens gomods/athens-proxy --namespace athens --set netrc.enabled=true
 ```
 
+> **Note:** The Athens image runs as the non-root user `athens` (uid `1000`), so a mounted secret must be readable by
+> that user (for example `fsGroup: 1000` together with a `defaultMode` such as `0440`) and a persistent volume used for
+> disk storage must be writable by it. See
+> [Running as a non-root user](/install/using-docker/#running-as-a-non-root-user). The chart is maintained outside of
+> this repository, so check its `securityContext` and secret mount settings when upgrading.
+
 ### gitconfig support
 
 A [gitconfig](https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration) file can be shared as a secret to allow

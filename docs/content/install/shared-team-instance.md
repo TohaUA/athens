@@ -48,6 +48,8 @@ docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
 
 Note: if you have not previously mounted this drive with Docker for Windows, you may be prompted to allow access
 
+Note: the Athens image runs as the non-root user `athens` (uid `1000`), so the storage directory must be writable by uid `1000`. If you get permission errors on Linux, run `sudo chown -R 1000:1000 $ATHENS_STORAGE`. See [Running as a non-root user](/install/using-docker/#running-as-a-non-root-user).
+
 Athens should now be running as a Docker container with the local directory, `athens-storage` mounted as a volume. When Athens retrieves the modules, they will be stored in the directory previously created. First, let's verify that Athens is running:
 
 ```console
@@ -159,6 +161,8 @@ docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
    -p 3000:3000 `
    gomods/athens:latest
 ```
+
+The same ownership note applies here: the storage directory must be writable by uid `1000` (see [Running as a non-root user](/install/using-docker/#running-as-a-non-root-user)).
 
 When we re-run our Go example, the Go cli will again download module from Athens. Athens, however, will not need to retrieve the module. It will be served from the Athens on-disk storage.
 
