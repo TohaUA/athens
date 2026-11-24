@@ -371,10 +371,10 @@ go.etcd.io/etcd/client/pkg/v3 v3.7.4 h1:633yLMDAQHWqLTRMxUNuZfOy6a4REJPcA3juoMRx
 go.etcd.io/etcd/client/pkg/v3 v3.7.4/go.mod h1:I1lMmoiq2SF4Wg0Gru7uXMovS1eEo6wwAxcFPFPk/v0=
 go.etcd.io/etcd/client/v3 v3.7.4 h1:dxgqiynqZkr7TCAWmILTBubRRNFJMNO0tb5BGBE41Bg=
 go.etcd.io/etcd/client/v3 v3.7.4/go.mod h1:XUTIBL+gwVM+AJDpJ7p8nKW4N7Ay3sF61Oc3lrwo/D8=
-go.etcd.io/etcd/pkg/v3 v3.7.3 h1:FoxH2JLECo/PYEHilgBFqz7Zlyiv5Sd20OlOOYESUos=
-go.etcd.io/etcd/pkg/v3 v3.7.3/go.mod h1:KMluxIriMegJqCjcmNmt1rdzyzZHvzsojBGmkN0ArYI=
-go.etcd.io/etcd/server/v3 v3.7.3 h1:KcTZ/aEZrOiQe0/kdr7iYYcvyfbEoOwDOacHkz8xwZc=
-go.etcd.io/etcd/server/v3 v3.7.3/go.mod h1:NElta3Kom1fQux/MhT9Vw5YRQMSaXk6d0MHkvLMpzO8=
+go.etcd.io/etcd/pkg/v3 v3.7.4 h1:+EFNlbNYoOWNazTNSBrU+5TCVvxQoDLa0cUN2t/2HUw=
+go.etcd.io/etcd/pkg/v3 v3.7.4/go.mod h1:QUsfihimN6X4RC/hJ+MfcopgfF3tmSAGioodMddxCjw=
+go.etcd.io/etcd/server/v3 v3.7.4 h1:CF4y3CspVWqGO6p76K/M7/+cWDI7NbxpWItTK5QO4GI=
+go.etcd.io/etcd/server/v3 v3.7.4/go.mod h1:DPeTpXLMvAQ24r+uGSe1Ah3tjUpEL4jpzXHRoIRlirU=
 go.etcd.io/raft/v3 v3.7.0 h1:BGzlwx07bLv8PW6OU5HObuz1y4hlPZUXA07pM1mPUh4=
 go.etcd.io/raft/v3 v3.7.0/go.mod h1:6gX6T2X907DjnjsFLODnTxba77stjs84W9gTTI0GUNA=
 go.mongodb.org/mongo-driver/v2 v2.10.0 h1:BYJLuVSu3/xDvToG+VQyoTPS+jxq9tuQDf+1nAlFKSE=
