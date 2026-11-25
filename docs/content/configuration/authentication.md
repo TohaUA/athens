@@ -6,6 +6,12 @@ weight: 2
 
 ## Authentication
 
+> **Note:** The Athens Docker image runs as the non-root user `athens` (uid/gid `1000`, home
+> `/home/athens`). Credential files and directories mounted into the container, such as
+> `.netrc`, `.gitconfig`, `.ssh`, `.hgrc`, `.subversion` or `.bazaar`, go under `/home/athens/`
+> (previously `/root/`) and must be readable by uid `1000`. See
+> [Running as a non-root user](/install/using-docker/#running-as-a-non-root-user).
+
 ## SVN private repositories
 
 1.  Subversion creates an authentication structure in
@@ -28,7 +34,7 @@ weight: 2
     export ATHENS_SVN=~/.subversion
     mkdir -p $ATHENS_STORAGE
     docker run -d -v $ATHENS_STORAGE:/var/lib/athens \
-      -v $ATHENS_SVN:/root/.subversion \
+      -v $ATHENS_SVN:/home/athens/.subversion \
       -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens \
       -e ATHENS_STORAGE_TYPE=disk \
       --name athens-proxy \
@@ -44,7 +50,7 @@ weight: 2
     $env:ATHENS_SVN = "$(Join-Path $pwd .subversion)"
     md -Path $env:ATHENS_STORAGE
     docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
-      -v "$($env:ATHENS_SVN):/root/.subversion" `
+      -v "$($env:ATHENS_SVN):/home/athens/.subversion" `
       -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens `
       -e ATHENS_STORAGE_TYPE=disk `
       --name athens-proxy `
@@ -160,7 +166,7 @@ weight: 2
    export ATHENS_BZR=~/.bazaar
    mkdir -p $ATHENS_STORAGE
    docker run -d -v $ATHENS_STORAGE:/var/lib/athens \
-     -v $ATHENS_BZR:/root/.bazaar \
+     -v $ATHENS_BZR:/home/athens/.bazaar \
      -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens \
      -e ATHENS_STORAGE_TYPE=disk \
      --name athens-proxy \
@@ -176,7 +182,7 @@ weight: 2
    $env:ATHENS_BZR = "$(Join-Path $pwd .bazaar)"
    md -Path $env:ATHENS_STORAGE
    docker run -d -v "$($env:ATHENS_STORAGE):/var/lib/athens" `
-     -v "$($env:ATHENS_BZR):/root/.bazaar" `
+     -v "$($env:ATHENS_BZR):/home/athens/.bazaar" `
      -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens `
      -e ATHENS_STORAGE_TYPE=disk `
      --name athens-proxy `
@@ -245,15 +251,17 @@ a public key bound to the cloning developer or service account on
 Bitbucket. This is essentially the github.com SSH model.  At a bare
 minimum, we need to provide Athens with an SSH private key and the
 http to ssh git rewrite rule, mounted inside the Athens container
-for use by the root user
+for use by the `athens` user (the image no longer runs as root, so
+credentials live under `/home/athens`; see
+[Running as a non-root user](/install/using-docker/#running-as-a-non-root-user))
 
 ```bash
 $ mkdir -p storage
 $ ATHENS_STORAGE=storage
 $ docker run --rm -d \
     -v "$PWD/$ATHENS_STORAGE:/var/lib/athens" \
-    -v "$PWD/gitconfig/.gitconfig:/root/.gitconfig" \
-    -v "$PWD/ssh-keys:/root/.ssh" \
+    -v "$PWD/gitconfig/.gitconfig:/home/athens/.gitconfig" \
+    -v "$PWD/ssh-keys:/home/athens/.ssh" \
     -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens -e ATHENS_STORAGE_TYPE=disk --name athens-proxy -p 3000:3000 gomods/athens:canary
 ```
 
@@ -280,7 +288,7 @@ and to show how to bind different hosts to different SSH keys
 Host git.example.com
 Hostname git.example.com
 StrictHostKeyChecking no
-IdentityFile /root/.ssh/id_rsa
+IdentityFile /home/athens/.ssh/id_rsa
 ```
 
 Now, builds executed through the Athens proxy should be able to clone the `git.example.com/golibs/logo` dependency over authenticated SSH.
@@ -303,11 +311,16 @@ $ ssh-add .ssh/id_rsa_something
 $ ATHENS_STORAGE=storage
 $ docker run --rm -d \
     -v "$PWD/$ATHENS_STORAGE:/var/lib/athens" \
-    -v "$PWD/gitconfig/.gitconfig:/root/.gitconfig" \
+    -v "$PWD/gitconfig/.gitconfig:/home/athens/.gitconfig" \
     -v "${SSH_AUTH_SOCK}:/.ssh_agent_sock" \
     -e "SSH_AUTH_SOCK=/.ssh_agent_sock" \
     -e ATHENS_DISK_STORAGE_ROOT=/var/lib/athens -e ATHENS_STORAGE_TYPE=disk --name athens-proxy -p 3000:3000 gomods/athens:canary
 ```
+
+The image no longer runs as root, so the process inside the container (uid `1000`) must be allowed to connect to the
+mounted socket. The agent socket is normally `0600` and owned by your host user, whose uid is often not `1000`
+(for example `501` on macOS). If private fetches fail with `Permission denied (publickey)` (`ssh -v` shows `Error connecting to agent:
+Permission denied`), make the socket connectable by uid `1000`, or use key files as described above instead.
 
 ## GitHub Apps
 
