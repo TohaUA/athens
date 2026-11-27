@@ -1,5 +1,4 @@
 //go:build e2etests
-// +build e2etests
 
 package e2etests
 
@@ -36,36 +35,35 @@ type catalogRes struct {
 func (m *E2eSuite) SetupSuite() {
 	var err error
 	m.goPath, err = os.MkdirTemp("/tmp", "gopath")
-	if err != nil {
-		m.Fail("Failed to make temp dir", err)
-	}
+	m.Require().NoError(err, "failed to make temp dir")
 
 	m.sampleRepoPath, err = os.MkdirTemp("/tmp", "repopath")
-	if err != nil {
-		m.Fail("Failed to make temp dir for sample repo", err)
-	}
+	m.Require().NoError(err, "failed to make temp dir for sample repo")
 
 	m.goBinaryPath = envy.Get("GO_BINARY_PATH", "go")
 
 	athensBin, err := buildAthens(m.goBinaryPath, m.goPath, m.env)
-	if err != nil {
-		m.Fail("Failed to build athens ", err)
-	}
-	stopAthens() // in case a dangling instance was around.
-	// ignoring error as if no athens is running it fails.
+	m.Require().NoError(err, "failed to build athens")
+	_ = stopAthens() // in case a dangling instance was around.
 
-	ctx := context.Background()
-	ctx, m.stopAthens = context.WithCancel(ctx)
-	runAthensAndWait(ctx, athensBin, m.getEnv())
-	setupTestRepo(m.sampleRepoPath, "https://github.com/athens-artifacts/happy-path.git")
+	ctx, cancel := context.WithCancel(context.Background())
+	m.stopAthens = cancel
+	m.Require().NoError(runAthensAndWait(ctx, athensBin, m.getEnv()), "failed to start athens")
+	m.Require().NoError(setupTestRepo(m.sampleRepoPath, "https://github.com/athens-artifacts/happy-path.git"), "failed to setup test repo")
 }
 
 func (m *E2eSuite) TearDownSuite() {
-	m.stopAthens()
-	chmodR(m.goPath, 0o777)
-	os.RemoveAll(m.goPath)
-	chmodR(m.sampleRepoPath, 0o777)
-	os.RemoveAll(m.sampleRepoPath)
+	if m.stopAthens != nil {
+		m.stopAthens()
+	}
+	if m.goPath != "" {
+		_ = chmodR(m.goPath, 0o777)
+		_ = os.RemoveAll(m.goPath)
+	}
+	if m.sampleRepoPath != "" {
+		_ = chmodR(m.sampleRepoPath, 0o777)
+		_ = os.RemoveAll(m.sampleRepoPath)
+	}
 }
 
 func TestE2E(t *testing.T) {
@@ -73,11 +71,9 @@ func TestE2E(t *testing.T) {
 }
 
 func (m *E2eSuite) SetupTest() {
-	chmodR(m.goPath, 0o777)
+	_ = chmodR(m.goPath, 0o777)
 	err := cleanGoCache(m.getEnv())
-	if err != nil {
-		m.Fail("Failed to clear go cache", err)
-	}
+	m.Require().NoError(err, "failed to clear go cache")
 }
 
 func (m *E2eSuite) TestNoGoProxy() {
@@ -85,32 +81,29 @@ func (m *E2eSuite) TestNoGoProxy() {
 	cmd.Env = m.env
 	cmd.Dir = m.sampleRepoPath
 
-	err := cmd.Run()
-	if err != nil {
-		m.Fail("go run failed on test repo", err)
-	}
+	output, err := cmd.CombinedOutput()
+	m.Require().NoError(err, "go run failed on test repo: %s", string(output))
 }
 
 func (m *E2eSuite) TestGoProxy() {
 	cmd := exec.Command("go", "run", ".")
 	cmd.Env = m.getEnvGoProxy(m.goPath)
 	cmd.Dir = m.sampleRepoPath
-	err := cmd.Run()
-	if err != nil {
-		m.Fail("go run failed on test repo", err)
-	}
-	resp, err := http.Get("http://localhost:3000/catalog")
-	if err != nil {
-		m.Fail("failed to read catalog", err)
-	}
+	output, err := cmd.CombinedOutput()
+	m.Require().NoError(err, "go run failed on test repo: %s", string(output))
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:3000/catalog", nil)
+	m.Require().NoError(err, "failed to build catalog request")
+	resp, err := http.DefaultClient.Do(req)
+	m.Require().NoError(err, "failed to read catalog")
+	defer resp.Body.Close()
+	m.Require().Equal(http.StatusOK, resp.StatusCode)
 
 	var catalog catalogRes
 	err = json.NewDecoder(resp.Body).Decode(&catalog)
-	if err != nil {
-		m.Fail("failed to decode catalog res", err)
-	}
-	m.Assert().Equal(len(catalog.Modules), 1)
-	m.Assert().Equal(catalog.Modules[0].Module, "github.com/athens-artifacts/no-tags")
+	m.Require().NoError(err, "failed to decode catalog res")
+	m.Require().Len(catalog.Modules, 1)
+	m.Assert().Equal("github.com/athens-artifacts/no-tags", catalog.Modules[0].Module)
 }
 
 func (m *E2eSuite) TestWrongGoProxy() {
